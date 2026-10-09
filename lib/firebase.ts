@@ -5,7 +5,8 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const firestoreDbId = (firebaseConfig as Record<string, any>).firestoreDatabaseId || 'ai-studio-arthursseocomman-120f02bc-439d-4a73-9b69-dd0987d51d1b';
+export const db = getFirestore(app, firestoreDbId);
 
 export async function testFirestoreConnection(): Promise<boolean> {
   try {

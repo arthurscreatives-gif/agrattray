@@ -192,12 +192,57 @@ export interface IntegrationSetting {
   name: string;
   description: string;
   isConnected: boolean;
+  isEnabled?: boolean;
   statusMessage: string;
   lastTested?: string;
   lastSynced?: string;
   maskedIdentifier?: string;
   credentialType: string;
   isPublishingConnector?: boolean;
+  semrushUnits?: number | null;
+  defaultProviderPreference?: 'dataforseo' | 'semrush';
+}
+
+export interface GscRow {
+  query?: string;
+  page?: string;
+  date?: string;
+  device?: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+  change?: string;
+}
+
+export interface GscSite {
+  siteUrl: string;
+  permissionLevel: string;
+  isDomainProperty: boolean;
+}
+
+export interface GscSitemap {
+  path: string;
+  lastSubmitted: string;
+  isPending: boolean;
+  isSitemapsIndex: boolean;
+  type: string;
+  lastDownloaded?: string;
+  warnings: number;
+  errors: number;
+}
+
+export interface GscInspection {
+  url: string;
+  verdict: string;
+  coverageState: string;
+  robotsTxtState: string;
+  indexingState: string;
+  pageFetchState: string;
+  googleCanonical: string;
+  userCanonical: string;
+  lastCrawlTime: string | null;
+  referringUrls: string[];
 }
 
 export interface UserSettings {

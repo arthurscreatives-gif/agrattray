@@ -5,6 +5,8 @@ import {
   User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -12,12 +14,21 @@ import {
 } from 'firebase/auth';
 import { auth, testFirestoreConnection } from './firebase';
 
+// Google Search Console read-only scope
+const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+
+// In-memory token cache (never stored in localStorage or sessionStorage)
+let cachedGoogleAccessToken: string | null = null;
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isOwner: boolean;
+  googleAccessToken: string | null;
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string, name?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<string | null>;
+  connectGoogleSearchConsole: () => Promise<string | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   quickAccessAsArthur: () => Promise<void>;
@@ -29,8 +40,11 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isOwner: false,
+  googleAccessToken: null,
   signIn: async () => {},
   signUp: async () => {},
+  signInWithGoogle: async () => null,
+  connectGoogleSearchConsole: async () => null,
   signOut: async () => {},
   resetPassword: async () => {},
   quickAccessAsArthur: async () => {},
@@ -45,12 +59,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     testFirestoreConnection().catch((err) => console.warn('Firestore initial check:', err));
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (!currentUser) {
+        cachedGoogleAccessToken = null;
+        setGoogleAccessToken(null);
+      }
       setLoading(false);
     });
 
@@ -58,6 +77,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const clearError = () => setAuthError(null);
+
+  const connectGoogleSearchConsole = async (): Promise<string | null> => {
+    setAuthError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope(GSC_SCOPE);
+      provider.setCustomParameters({
+        prompt: 'consent',
+        access_type: 'offline',
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        cachedGoogleAccessToken = credential.accessToken;
+        setGoogleAccessToken(credential.accessToken);
+        return credential.accessToken;
+      }
+      return null;
+    } catch (err: any) {
+      setAuthError(err.message || 'Google authorization failed.');
+      throw err;
+    }
+  };
+
+  const signInWithGoogle = async (): Promise<string | null> => {
+    return connectGoogleSearchConsole();
+  };
 
   const signIn = async (email: string, pass: string) => {
     setAuthError(null);
@@ -130,8 +177,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         isOwner,
+        googleAccessToken,
         signIn,
         signUp,
+        signInWithGoogle,
+        connectGoogleSearchConsole,
         signOut,
         resetPassword,
         quickAccessAsArthur,

@@ -21,6 +21,7 @@ interface SettingsViewProps {
   emergencyKillswitch: boolean;
   onToggleKillswitch: (enabled: boolean) => void;
   monthlySpent: number;
+  onNavigateToIntegrations?: () => void;
 }
 
 export default function SettingsView({
@@ -29,20 +30,34 @@ export default function SettingsView({
   emergencyKillswitch,
   onToggleKillswitch,
   monthlySpent,
+  onNavigateToIntegrations,
 }: SettingsViewProps) {
   const { user } = useAuth();
   const [limitInput, setLimitInput] = useState(monthlyLimit.toString());
+  const [dailyLimitInput, setDailyLimitInput] = useState('1.00');
   const [allowRegistration, setAllowRegistration] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
 
-  const handleSaveBudget = (e: React.FormEvent) => {
+  const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(limitInput);
+    const dailyVal = parseFloat(dailyLimitInput);
     if (!isNaN(val) && val > 0) {
       onUpdateMonthlyLimit(val);
-      setSavedMsg(true);
-      setTimeout(() => setSavedMsg(false), 2500);
     }
+    if (!isNaN(dailyVal) && dailyVal > 0) {
+      try {
+        await fetch('/api/dataforseo/credentials', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dailySpendingLimit: dailyVal, monthlySpendingLimit: val }),
+        });
+      } catch {
+        // ignore
+      }
+    }
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2500);
   };
 
   return (
@@ -80,10 +95,26 @@ export default function SettingsView({
         </div>
 
         {/* Limit form */}
-        <form onSubmit={handleSaveBudget} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+        <form onSubmit={handleSaveBudget} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Monthly Spending Limit ($ USD)
+              Daily Limit ($ USD)
+            </label>
+            <input
+              type="number"
+              step="0.25"
+              min="0.25"
+              max="50"
+              value={dailyLimitInput}
+              onChange={(e) => setDailyLimitInput(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Default: $1.00 / day</span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Monthly Limit ($ USD)
             </label>
             <input
               type="number"
@@ -94,6 +125,7 @@ export default function SettingsView({
               onChange={(e) => setLimitInput(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Default: $10.00 / mo</span>
           </div>
 
           <div>
@@ -104,7 +136,7 @@ export default function SettingsView({
               defaultValue="weekly"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="weekly">Weekly (Recommended — Lowest Cost)</option>
+              <option value="weekly">Weekly (Lowest Cost)</option>
               <option value="biweekly">Bi-Weekly</option>
               <option value="manual">Manual Checks Only</option>
             </select>
@@ -115,9 +147,22 @@ export default function SettingsView({
             className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
           >
             <Save className="w-4 h-4" />
-            <span>Save Spending Limit</span>
+            <span>Save Limits</span>
           </button>
         </form>
+
+        {onNavigateToIntegrations && (
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-600">Need to update DataForSEO API Login or Password?</span>
+            <button
+              type="button"
+              onClick={onNavigateToIntegrations}
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold"
+            >
+              Open DataForSEO Integration Card →
+            </button>
+          </div>
+        )}
 
         {savedMsg && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center gap-2">

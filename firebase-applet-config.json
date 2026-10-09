@@ -1,12 +1,11 @@
 {
-  "projectId": "gen-lang-client-0728846158",
-  "appId": "1:301686868534:web:92c951678ce309d34c6697",
-  "apiKey": "AIzaSyCLBesyWC0hVYNCbzBVvV3qWUjBX3k2PxQ",
-  "authDomain": "gen-lang-client-0728846158.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-arthursseocomman-120f02bc-439d-4a73-9b69-dd0987d51d1b",
-  "storageBucket": "gen-lang-client-0728846158.firebasestorage.app",
-  "messagingSenderId": "301686868534",
-  "measurementId": "G-5WS94GX36S",
-  "oAuthClientId": "301686868534-p3tb587uruhvrvees032o4nv16uh3tom.apps.googleusercontent.com",
+  "projectId": "arthurs-ai-website-builder",
+  "appId": "1:731854735257:web:e581d26054e0637a7ff508",
+  "apiKey": "AIzaSyCeB4KbIFvffZFFX21BrQ2lAWxuauzvTTo",
+  "authDomain": "arthurs-ai-website-builder.firebaseapp.com",
+  "storageBucket": "arthurs-ai-website-builder.firebasestorage.app",
+  "messagingSenderId": "731854735257",
+  "measurementId": "",
+  "oAuthClientId": "731854735257-l9u350ortkumf1u737ci92eq2pj62oj5.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

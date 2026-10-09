@@ -2,5 +2,7 @@
   "name": "Arthur’s SEO Command Center",
   "description": "Private, full-stack SEO management platform for auditing websites, keyword research, competitor analysis, rank tracking, and actionable recommendations.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

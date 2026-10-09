@@ -433,6 +433,8 @@ function CommandCenterApp() {
             crawledPages={crawledPages}
             onSaveTrackedKeyword={handleSaveTrackedKeyword}
             onDeleteTrackedKeyword={handleDeleteTrackedKeyword}
+            onSaveRecommendation={handleSaveRecommendation}
+            onSaveTask={handleSaveTask}
             monthlySpent={monthlySpent}
             monthlyLimit={monthlyLimit}
             emergencyKillswitch={emergencyKillswitch}
@@ -463,7 +465,13 @@ function CommandCenterApp() {
           <SearchConsoleView
             activeWebsite={activeWebsite}
             gscConnected={gscConn}
-            onConnectGsc={() => {}}
+            onConnectGsc={() => {
+              handleUpdateIntegration('google_search_console', {
+                isConnected: true,
+                lastTested: new Date().toISOString(),
+                statusMessage: 'Connected via Google OAuth',
+              });
+            }}
           />
         )}
 
@@ -514,6 +522,7 @@ function CommandCenterApp() {
             emergencyKillswitch={emergencyKillswitch}
             onToggleKillswitch={setEmergencyKillswitch}
             monthlySpent={monthlySpent}
+            onNavigateToIntegrations={() => setCurrentTab('integrations')}
           />
         )}
       </main>
