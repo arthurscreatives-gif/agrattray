@@ -255,3 +255,58 @@ export interface UserSettings {
   currentMonthUsage: number;
   totalUsage: number;
 }
+
+export interface PageSpeedScores {
+  performance: number;
+  accessibility: number;
+  bestPractices: number;
+  seo: number;
+}
+
+export interface PageSpeedMetrics {
+  lcp: string; // Largest Contentful Paint (e.g. 1.8 s)
+  fcp: string; // First Contentful Paint (e.g. 0.9 s)
+  cls: string; // Cumulative Layout Shift (e.g. 0.02)
+  tbt: string; // Total Blocking Time (e.g. 40 ms)
+  speedIndex: string; // Speed Index (e.g. 1.2 s)
+  inp: string; // Interaction to Next Paint (e.g. 65 ms)
+  lcpNumeric?: number; // ms
+  fcpNumeric?: number; // ms
+  clsNumeric?: number; // raw value
+  tbtNumeric?: number; // ms
+}
+
+export interface PageSpeedOpportunity {
+  id: string;
+  title: string;
+  description: string;
+  savingsMs?: number;
+  savingsBytes?: number;
+  displayValue?: string;
+  score?: number;
+}
+
+export interface PageSpeedDiagnostic {
+  id: string;
+  title: string;
+  displayValue?: string;
+  description?: string;
+  score?: number | null;
+}
+
+export interface PageSpeedTestRun {
+  id: string;
+  websiteId: string;
+  userId: string;
+  url: string;
+  pageLabel?: string;
+  strategy: 'mobile' | 'desktop';
+  scores: PageSpeedScores;
+  metrics: PageSpeedMetrics;
+  opportunities?: PageSpeedOpportunity[];
+  diagnostics: PageSpeedDiagnostic[];
+  coreWebVitalsStatus?: 'passed' | 'needs_improvement' | 'failed';
+  fetchedAt: string;
+  provider: string;
+}
+

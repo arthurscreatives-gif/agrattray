@@ -21,12 +21,14 @@ import {
   ShieldCheck,
   DollarSign,
   ChevronDown,
+  Gauge,
 } from 'lucide-react';
 
 export type NavTab =
   | 'dashboard'
   | 'websites'
   | 'audit'
+  | 'pagespeed'
   | 'keywords'
   | 'rankings'
   | 'competitors'
@@ -65,6 +67,7 @@ export default function Navbar({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'websites', label: 'Websites', icon: Globe, badge: `${websites.length}` },
     { id: 'audit', label: 'Site Audit', icon: SearchCode },
+    { id: 'pagespeed', label: 'PageSpeed', icon: Gauge },
     { id: 'keywords', label: 'Keywords', icon: KeyRound },
     { id: 'rankings', label: 'Rankings', icon: TrendingUp },
     { id: 'competitors', label: 'Competitors', icon: Users2 },

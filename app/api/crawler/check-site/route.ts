@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isSafePublicUrl, parseRobotsTxt, extractUrlsFromSitemap } from '@/lib/crawler';
+import { isSafePublicUrl, validateSafePublicUrlWithDns, parseRobotsTxt, extractUrlsFromSitemap } from '@/lib/crawler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Website URL is required' }, { status: 400 });
     }
 
-    const safety = isSafePublicUrl(url);
+    const safety = await validateSafePublicUrlWithDns(url);
     if (!safety.safe || !safety.normalizedUrl) {
       return NextResponse.json({ error: safety.reason || 'Invalid or prohibited URL' }, { status: 400 });
     }

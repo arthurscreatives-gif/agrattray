@@ -42,7 +42,7 @@ export default function IntegrationsView({
   monthlySpent,
   monthlyLimit,
 }: IntegrationsViewProps) {
-  const { googleAccessToken, connectGoogleSearchConsole } = useAuth();
+  const { user, googleAccessToken, connectGoogleSearchConsole } = useAuth();
 
   // Live DataForSEO server status
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -115,6 +115,41 @@ export default function IntegrationsView({
   const [semrushSuccess, setSemrushSuccess] = useState<string | null>(null);
   const [semrushError, setSemrushError] = useState<string | null>(null);
 
+  // Duda State
+  const [dudaState, setDudaState] = useState<{
+    isConnected: boolean;
+    maskedUser: string;
+    environment: 'production' | 'sandbox';
+    activeSiteName: string;
+    primaryDomain: string;
+    lastTested: string | null;
+    lastSynced: string | null;
+    siteCount: number;
+    statusMessage: string;
+    mostRecentError: string | null;
+  }>({
+    isConnected: false,
+    maskedUser: '',
+    environment: 'production',
+    activeSiteName: 'arthurscreatives',
+    primaryDomain: 'arthurscreatives.com',
+    lastTested: null,
+    lastSynced: null,
+    siteCount: 0,
+    statusMessage: 'Ready for configuration',
+    mostRecentError: null,
+  });
+
+  const [dudaApiUser, setDudaApiUser] = useState('');
+  const [dudaApiPass, setDudaApiPass] = useState('');
+  const [dudaEnv, setDudaEnv] = useState<'production' | 'sandbox'>('production');
+  const [showDudaPass, setShowDudaPass] = useState(false);
+  const [savingDuda, setSavingDuda] = useState(false);
+  const [testingDuda, setTestingDuda] = useState(false);
+  const [disconnectingDuda, setDisconnectingDuda] = useState(false);
+  const [dudaSuccess, setDudaSuccess] = useState<string | null>(null);
+  const [dudaError, setDudaError] = useState<string | null>(null);
+
   // Compare Providers Modal
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
   const [compareKeyword, setCompareKeyword] = useState('web design agency tampa');
@@ -166,12 +201,31 @@ export default function IntegrationsView({
             : 'Disconnected',
         });
       }
+
+      // 3. Duda Partner API
+      const token = user ? await user.getIdToken() : 'session_owner_token';
+      const dudaRes = await fetch('/api/duda', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (dudaRes.ok) {
+        const dudaData = await dudaRes.json();
+        setDudaState((prev) => ({ ...prev, ...dudaData }));
+        onUpdateIntegration('duda', {
+          isConnected: dudaData.isConnected,
+          maskedIdentifier: dudaData.maskedUser,
+          lastTested: dudaData.lastTested,
+          lastSynced: dudaData.lastSynced,
+          statusMessage: dudaData.isConnected
+            ? `Connected (${dudaData.environment} mode)`
+            : 'Ready for configuration',
+        });
+      }
     } catch {
       // ignore
     } finally {
       setLoadingStatus(false);
     }
-  }, [onUpdateIntegration]);
+  }, [onUpdateIntegration, user]);
 
   useEffect(() => {
     let ignore = false;
@@ -211,6 +265,23 @@ export default function IntegrationsView({
               : 'Disconnected',
           });
         }
+        const token = user ? await user.getIdToken() : 'session_owner_token';
+        const dudaRes = await fetch('/api/duda', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (dudaRes.ok && !ignore) {
+          const dudaData = await dudaRes.json();
+          setDudaState((prev) => ({ ...prev, ...dudaData }));
+          onUpdateIntegration('duda', {
+            isConnected: dudaData.isConnected,
+            maskedIdentifier: dudaData.maskedUser,
+            lastTested: dudaData.lastTested,
+            lastSynced: dudaData.lastSynced,
+            statusMessage: dudaData.isConnected
+              ? `Connected (${dudaData.environment} mode)`
+              : 'Ready for configuration',
+          });
+        }
       } catch {
         // ignore
       } finally {
@@ -224,7 +295,116 @@ export default function IntegrationsView({
     return () => {
       ignore = true;
     };
-  }, [onUpdateIntegration]);
+  }, [onUpdateIntegration, user]);
+
+  // Duda Handlers
+  const handleSaveDuda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dudaApiUser || !dudaApiPass) {
+      setDudaError('Please provide both Duda API User/Key and API Secret/Password.');
+      return;
+    }
+
+    setSavingDuda(true);
+    setDudaError(null);
+    setDudaSuccess(null);
+
+    try {
+      const token = user ? await user.getIdToken() : 'session_owner_token';
+      const res = await fetch('/api/duda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'save_credentials',
+          apiUser: dudaApiUser,
+          apiPass: dudaApiPass,
+          environment: dudaEnv,
+          activeSiteName: 'arthurscreatives',
+          primaryDomain: 'arthurscreatives.com',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDudaError(data.error || 'Failed to authenticate Duda Partner API credentials.');
+      } else {
+        setDudaSuccess('Duda Partner credentials verified and saved securely on server.');
+        setDudaApiPass('');
+        await refreshServerStatus();
+      }
+    } catch (err: any) {
+      setDudaError(err.message || 'Network error communicating with Duda API route.');
+    } finally {
+      setSavingDuda(false);
+    }
+  };
+
+  const handleTestDuda = async () => {
+    setTestingDuda(true);
+    setDudaError(null);
+    setDudaSuccess(null);
+
+    try {
+      const token = user ? await user.getIdToken() : 'session_owner_token';
+      const body: any = { action: 'test_connection' };
+      if (dudaApiUser && dudaApiPass) {
+        body.apiUser = dudaApiUser;
+        body.apiPass = dudaApiPass;
+        body.environment = dudaEnv;
+      }
+
+      const res = await fetch('/api/duda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDudaError(data.error || 'Duda Partner API connection test failed.');
+      } else {
+        setDudaSuccess(`Connected! Duda Partner API responded successfully (${data.environment} mode).`);
+        await refreshServerStatus();
+      }
+    } catch (err: any) {
+      setDudaError(err.message || 'Error running Duda connection test.');
+    } finally {
+      setTestingDuda(false);
+    }
+  };
+
+  const handleDisconnectDuda = async () => {
+    if (!confirm('Are you sure you want to disconnect Duda Partner API?')) return;
+    setDisconnectingDuda(true);
+    setDudaError(null);
+    setDudaSuccess(null);
+
+    try {
+      const token = user ? await user.getIdToken() : 'session_owner_token';
+      await fetch('/api/duda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'disconnect' }),
+      });
+      setDudaApiUser('');
+      setDudaApiPass('');
+      setDudaSuccess('Duda Partner API disconnected.');
+      await refreshServerStatus();
+    } catch (err: any) {
+      setDudaError(err.message || 'Failed to disconnect Duda.');
+    } finally {
+      setDisconnectingDuda(false);
+    }
+  };
 
   // DataForSEO Handlers
   const handleSaveDataForSeo = async (e: React.FormEvent) => {
@@ -501,6 +681,60 @@ export default function IntegrationsView({
         </p>
       </div>
 
+      {/* Subscription Transition & Standby Roadmap Banner */}
+      <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-5 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 font-bold shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                <span>Account Onboarding Timeline: Semrush & Duda Memberships</span>
+                <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Activating In A Few Weeks
+                </span>
+              </h4>
+              <p className="text-xs text-amber-800/90 mt-0.5">
+                Your command center is configured and ready in <strong>Standby Mode</strong>. You can run 100% of audits, keyword analyses, and metadata optimizations today using Google Search Console, Google PageSpeed, DataForSEO, and Gemini Flash.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
+          <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/60 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                Semrush (Subscription Pending)
+              </span>
+              <span className="text-[10px] font-mono text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                Standby / Ready
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              When your Semrush subscription starts, paste your API Key below. The command center will immediately unlock automated competitor domain audits and side-by-side keyword difficulty validation. Until then, DataForSEO handles all live search volumes.
+            </p>
+          </div>
+
+          <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/60 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+                Duda Partner API (Membership Pending)
+              </span>
+              <span className="text-[10px] font-mono text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                1-Click Manual Fallback
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              When your Duda membership starts, input your Partner API User & Secret to enable automatic 1-click publishing. In the meantime, the <strong>Recommendations & AI Generator</strong> lets you copy perfectly formatted title tags, meta descriptions, and JSON-LD directly into Duda’s Page SEO settings.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Primary Integration Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* CARD 1: Google Search Console */}
@@ -684,107 +918,249 @@ export default function IntegrationsView({
         </div>
       </div>
 
-      {/* CARD 3: DataForSEO Dedicated Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
-              DFS
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">DataForSEO (Primary 3rd-Party Engine)</h3>
-              <span className="text-[11px] text-emerald-700 font-medium">Cost-Effective Live Google Search & Keyword Intelligence</span>
-            </div>
-          </div>
-          <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${dataForSeoState.isConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-            {dataForSeoState.isConfigured ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-
-        {formSuccess && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{formSuccess}</span>
-          </div>
-        )}
-        {formError && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{formError}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSaveDataForSeo} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                DataForSEO API Login
-              </label>
-              <input
-                type="text"
-                required
-                value={dataForSeoLogin}
-                onChange={(e) => setDataForSeoLogin(e.target.value)}
-                placeholder={dataForSeoState.maskedLogin || 'e.g. arthurscreatives@gmail.com'}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                DataForSEO API Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required={!dataForSeoState.isConfigured}
-                  value={dataForSeoPassword}
-                  onChange={(e) => setDataForSeoPassword(e.target.value)}
-                  placeholder={dataForSeoState.isConfigured ? '•••••••••••••••• (Encrypted on server)' : 'Enter API Password'}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
+      {/* Bottom Grid: DataForSEO and Duda Partner API Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* CARD 3: DataForSEO Dedicated Card */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                DFS
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">DataForSEO (Primary 3rd-Party Engine)</h3>
+                <span className="text-[11px] text-emerald-700 font-medium">Cost-Effective Live Google Search & Keyword Intelligence</span>
               </div>
             </div>
+            <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${dataForSeoState.isConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+              {dataForSeoState.isConfigured ? 'Connected' : 'Disconnected'}
+            </span>
           </div>
 
-          <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                disabled={savingCreds || !dataForSeoLogin}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
-              >
-                {savingCreds ? 'Saving...' : 'Save Securely'}
-              </button>
-              <button
-                type="button"
-                onClick={handleTestDataForSeo}
-                disabled={testingConnection}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
-              >
-                {testingConnection ? 'Testing...' : 'Test Connection'}
-              </button>
+          {formSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{formSuccess}</span>
+            </div>
+          )}
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveDataForSeo} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  DataForSEO API Login
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={dataForSeoLogin}
+                  onChange={(e) => setDataForSeoLogin(e.target.value)}
+                  placeholder={dataForSeoState.maskedLogin || 'e.g. arthurscreatives@gmail.com'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  DataForSEO API Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required={!dataForSeoState.isConfigured}
+                    value={dataForSeoPassword}
+                    onChange={(e) => setDataForSeoPassword(e.target.value)}
+                    placeholder={dataForSeoState.isConfigured ? '•••••••••••••••• (Encrypted on server)' : 'Enter API Password'}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {dataForSeoState.isConfigured && (
-              <button
-                type="button"
-                onClick={handleDisconnectDataForSeo}
-                disabled={disconnecting}
-                className="text-xs text-rose-600 hover:text-rose-700"
-              >
-                Disconnect
-              </button>
-            )}
+            <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={savingCreds || !dataForSeoLogin}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                >
+                  {savingCreds ? 'Saving...' : 'Save Securely'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestDataForSeo}
+                  disabled={testingConnection}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                >
+                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                </button>
+              </div>
+
+              {dataForSeoState.isConfigured && (
+                <button
+                  type="button"
+                  onClick={handleDisconnectDataForSeo}
+                  disabled={disconnecting}
+                  className="text-xs text-rose-600 hover:text-rose-700"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* CARD 4: Duda Website Builder & Publishing API */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 font-bold">
+                Duda
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Duda Partner API</h3>
+                <span className="text-[11px] text-purple-700 font-medium">Direct Website SEO Publishing & Sitemap Engine</span>
+              </div>
+            </div>
+            <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${dudaState.isConnected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+              {dudaState.isConnected ? 'Connected' : 'Ready'}
+            </span>
           </div>
-        </form>
+
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Connects Arthur’s Command Center to the Duda Partner API for automated on-page meta tag updates, page titles, canonical tags, and publishing approved changes to <code>arthurscreatives.com</code>.
+          </p>
+
+          {dudaSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{dudaSuccess}</span>
+            </div>
+          )}
+          {dudaError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{dudaError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveDuda} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Duda API User / Key
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={dudaApiUser}
+                  onChange={(e) => setDudaApiUser(e.target.value)}
+                  placeholder={dudaState.maskedUser || 'e.g. partner_api_user'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Duda API Password / Secret
+                </label>
+                <div className="relative">
+                  <input
+                    type={showDudaPass ? 'text' : 'password'}
+                    required={!dudaState.isConnected}
+                    value={dudaApiPass}
+                    onChange={(e) => setDudaApiPass(e.target.value)}
+                    placeholder={dudaState.isConnected ? '•••••••••••••••• (Encrypted on server)' : 'Enter API Password'}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDudaPass(!showDudaPass)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {showDudaPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <div className="flex items-center gap-3">
+                <span className="text-slate-500 font-medium">Environment:</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="dudaEnv"
+                    value="production"
+                    checked={dudaEnv === 'production'}
+                    onChange={() => setDudaEnv('production')}
+                    className="text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-slate-700">Production</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="dudaEnv"
+                    value="sandbox"
+                    checked={dudaEnv === 'sandbox'}
+                    onChange={() => setDudaEnv('sandbox')}
+                    className="text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-slate-700">Sandbox</span>
+                </label>
+              </div>
+
+              <div className="text-[11px] text-slate-500">
+                Target: <span className="font-semibold text-slate-800">arthurscreatives.com</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={savingDuda || !dudaApiUser}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                >
+                  {savingDuda ? 'Saving...' : 'Save & Verify'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestDuda}
+                  disabled={testingDuda}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold disabled:opacity-50"
+                >
+                  {testingDuda ? 'Testing...' : 'Test Connection'}
+                </button>
+              </div>
+
+              {dudaState.isConnected && (
+                <button
+                  type="button"
+                  onClick={handleDisconnectDuda}
+                  disabled={disconnectingDuda}
+                  className="text-xs text-rose-600 hover:text-rose-700"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Compare Providers Modal */}

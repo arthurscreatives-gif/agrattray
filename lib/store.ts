@@ -9,6 +9,7 @@ import {
   SeoTask,
   IntegrationSetting,
   UserSettings,
+  PageSpeedTestRun,
 } from '@/types/seo';
 import { db } from './firebase';
 import {
@@ -238,3 +239,37 @@ export async function saveRecommendationToFirestore(
   const docRef = doc(db, 'users', userId, 'websites', websiteId, 'recommendations', rec.id);
   await setDoc(docRef, { ...rec, userId, websiteId }, { merge: true });
 }
+
+export async function getPageSpeedTestsFromFirestore(
+  userId: string,
+  websiteId: string
+): Promise<PageSpeedTestRun[]> {
+  try {
+    const colRef = collection(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests');
+    const snapshot = await getDocs(colRef);
+    const tests = snapshot.docs.map((d) => d.data() as PageSpeedTestRun);
+    return tests.sort((a, b) => new Date(b.fetchedAt).getTime() - new Date(a.fetchedAt).getTime());
+  } catch (err) {
+    console.warn('Firestore fetch pagespeed tests fallback:', err);
+    return [];
+  }
+}
+
+export async function savePageSpeedTestToFirestore(
+  userId: string,
+  websiteId: string,
+  test: PageSpeedTestRun
+): Promise<void> {
+  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', test.id);
+  await setDoc(docRef, { ...test, userId, websiteId }, { merge: true });
+}
+
+export async function deletePageSpeedTestFromFirestore(
+  userId: string,
+  websiteId: string,
+  testId: string
+): Promise<void> {
+  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', testId);
+  await deleteDoc(docRef);
+}
+

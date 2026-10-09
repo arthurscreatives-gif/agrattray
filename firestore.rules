@@ -53,6 +53,10 @@ service cloud.firestore {
         match /seo_tasks/{taskId} {
           allow read, write: if isOwner(userId) && isValidId(taskId);
         }
+
+        match /pagespeed_tests/{testId} {
+          allow read, write: if isOwner(userId) && isValidId(testId);
+        }
       }
 
       match /integrations/{integrationId} {

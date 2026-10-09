@@ -3,6 +3,7 @@
   "appId": "1:731854735257:web:e581d26054e0637a7ff508",
   "apiKey": "AIzaSyCeB4KbIFvffZFFX21BrQ2lAWxuauzvTTo",
   "authDomain": "arthurs-ai-website-builder.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-arthursseocomman-120f02bc-439d-4a73-9b69-dd0987d51d1b",
   "storageBucket": "arthurs-ai-website-builder.firebasestorage.app",
   "messagingSenderId": "731854735257",
   "measurementId": "",

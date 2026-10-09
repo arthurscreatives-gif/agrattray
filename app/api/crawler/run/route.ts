@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   isSafePublicUrl,
+  validateSafePublicUrlWithDns,
   parseRobotsTxt,
   extractUrlsFromSitemap,
   isDisallowedByRobots,
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const safety = isSafePublicUrl(url);
+    const safety = await validateSafePublicUrlWithDns(url);
     if (!safety.safe || !safety.normalizedUrl) {
       return NextResponse.json({ error: safety.reason || 'Prohibited URL' }, { status: 400 });
     }

@@ -19,6 +19,7 @@ import SeoTasksView from '@/components/views/SeoTasksView';
 import ReportsView from '@/components/views/ReportsView';
 import IntegrationsView from '@/components/views/IntegrationsView';
 import SettingsView from '@/components/views/SettingsView';
+import PageSpeedInsightsView from '@/components/views/PageSpeedInsightsView';
 
 import {
   Website,
@@ -423,6 +424,13 @@ function CommandCenterApp() {
               setCurrentTab('recommendations');
             }}
             crawling={crawling}
+          />
+        )}
+
+        {currentTab === 'pagespeed' && (
+          <PageSpeedInsightsView
+            website={activeWebsite}
+            onNavigateToTasks={() => setCurrentTab('tasks')}
           />
         )}
 

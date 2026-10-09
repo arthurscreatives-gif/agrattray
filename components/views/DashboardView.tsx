@@ -30,6 +30,7 @@ import {
   ChevronRight,
   FileQuestion,
   Calendar,
+  Gauge,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -126,6 +127,14 @@ export default function DashboardView({
               <option>All Time</option>
             </select>
           </div>
+
+          <button
+            onClick={() => onNavigate('pagespeed')}
+            className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <Gauge className="w-3.5 h-3.5" />
+            <span>PageSpeed Audit</span>
+          </button>
 
           <button
             onClick={() => onNavigate('audit')}

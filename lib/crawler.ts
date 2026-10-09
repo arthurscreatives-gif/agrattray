@@ -1,42 +1,188 @@
 import { CrawledPage, AuditIssue, IssueCategory, IssueSeverity } from '@/types/seo';
+import dns from 'dns';
 
-// SSRF Protection: Deny private, loopback, link-local, and reserved IP addresses
+// SSRF Protection: Check if an IP address belongs to private, loopback, link-local, multicast, or reserved ranges
+export function isPrivateOrReservedIp(ip: string): boolean {
+  if (!ip) return true;
+  const cleanIp = ip.trim().toLowerCase();
+
+  // IPv6 checks
+  if (cleanIp.includes(':')) {
+    if (cleanIp === '::1' || cleanIp === '::') return true;
+    if (cleanIp.startsWith('fe80:')) return true; // Link-local
+    if (cleanIp.startsWith('fc') || cleanIp.startsWith('fd')) return true; // Unique local fc00::/7
+    if (cleanIp.startsWith('ff')) return true; // Multicast
+    // IPv4-mapped IPv6 (::ffff:127.0.0.1 or ::ffff:7f00:1)
+    if (cleanIp.startsWith('::ffff:')) {
+      const mappedIpv4 = cleanIp.replace('::ffff:', '');
+      return isPrivateOrReservedIp(mappedIpv4);
+    }
+    return false;
+  }
+
+  // IPv4 checks
+  const ipv4Parts = cleanIp.split('.');
+  if (ipv4Parts.length === 4) {
+    const octets = ipv4Parts.map((p) => parseInt(p, 10));
+    if (octets.some((o) => isNaN(o) || o < 0 || o > 255)) return true;
+
+    const [o1, o2, o3, o4] = octets;
+
+    // 0.0.0.0/8 (Current network)
+    if (o1 === 0) return true;
+    // 10.0.0.0/8 (Private)
+    if (o1 === 10) return true;
+    // 100.64.0.0/10 (Shared Address Space / CGNAT)
+    if (o1 === 100 && o2 >= 64 && o2 <= 127) return true;
+    // 127.0.0.0/8 (Loopback)
+    if (o1 === 127) return true;
+    // 169.254.0.0/16 (Link-local & AWS/GCP/Azure Cloud Metadata 169.254.169.254)
+    if (o1 === 169 && o2 === 254) return true;
+    // 172.16.0.0/12 (Private)
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
+    // 192.0.0.0/24 (IETF Protocol Assignments)
+    if (o1 === 192 && o2 === 0 && o3 === 0) return true;
+    // 192.0.2.0/24 (TEST-NET-1)
+    if (o1 === 192 && o2 === 0 && o3 === 2) return true;
+    // 192.168.0.0/16 (Private)
+    if (o1 === 192 && o2 === 168) return true;
+    // 198.18.0.0/15 (Network benchmark tests)
+    if (o1 === 198 && (o2 === 18 || o2 === 19)) return true;
+    // 198.51.100.0/24 (TEST-NET-2)
+    if (o1 === 198 && o2 === 51 && o3 === 100) return true;
+    // 203.0.113.0/24 (TEST-NET-3)
+    if (o1 === 203 && o2 === 0 && o3 === 113) return true;
+    // 224.0.0.0/4 (Multicast 224-239)
+    if (o1 >= 224 && o1 <= 239) return true;
+    // 240.0.0.0/4 (Reserved / Future use)
+    if (o1 >= 240) return true;
+    // 255.255.255.255 (Broadcast)
+    if (o1 === 255 && o2 === 255 && o3 === 255 && o4 === 255) return true;
+  }
+
+  return false;
+}
+
+// Blocked suspicious and local hostnames
+const BLOCKED_HOSTNAMES = new Set([
+  'localhost',
+  'localhost.localdomain',
+  'broadcasthost',
+  'local',
+  'internal',
+  'metadata',
+  'metadata.google.internal',
+  'metadata.goog',
+  'instance-data',
+  'kubernetes.default',
+  'kubernetes.default.svc',
+]);
+
+// SSRF Protection: Synchronous URL format and range validation
 export function isSafePublicUrl(inputUrl: string): { safe: boolean; reason?: string; normalizedUrl?: string } {
   try {
-    const parsed = new URL(inputUrl);
+    if (!inputUrl || typeof inputUrl !== 'string') {
+      return { safe: false, reason: 'URL must be a non-empty string.' };
+    }
 
+    const trimmed = inputUrl.trim();
+
+    // Prevent local file scheme explicitly
+    if (
+      trimmed.startsWith('file:') ||
+      trimmed.startsWith('filesystem:') ||
+      trimmed.startsWith('/') ||
+      trimmed.startsWith('\\') ||
+      trimmed.startsWith('.')
+    ) {
+      return { safe: false, reason: 'Local file access and filesystem schemes are strictly prohibited.' };
+    }
+
+    const parsed = new URL(trimmed);
+
+    // Only allow HTTP and HTTPS protocols
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { safe: false, reason: 'Only HTTP and HTTPS protocols are allowed.' };
+      return { safe: false, reason: 'Only HTTP and HTTPS protocols are allowed. Schemes like file:, ftp:, gopher:, or data: are blocked.' };
     }
 
     const host = parsed.hostname.toLowerCase();
 
-    // Check for localhost or loopback
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
-      return { safe: false, reason: 'Localhost and loopback addresses are blocked for security.' };
+    // Check blocked hostnames
+    if (
+      BLOCKED_HOSTNAMES.has(host) ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return { safe: false, reason: 'Localhost and internal hostnames are restricted.' };
     }
 
-    // Check for private IPv4 ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
-    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-    const ipMatch = host.match(ipv4Regex);
-    if (ipMatch) {
-      const octet1 = parseInt(ipMatch[1], 10);
-      const octet2 = parseInt(ipMatch[2], 10);
-
-      if (octet1 === 10) return { safe: false, reason: 'Private IP space (10.0.0.0/8) is restricted.' };
-      if (octet1 === 172 && octet2 >= 16 && octet2 <= 31) return { safe: false, reason: 'Private IP space (172.16.0.0/12) is restricted.' };
-      if (octet1 === 192 && octet2 === 168) return { safe: false, reason: 'Private IP space (192.168.0.0/16) is restricted.' };
-      if (octet1 === 169 && octet2 === 254) return { safe: false, reason: 'Link-local addresses (169.254.0.0/16) are restricted.' };
-      if (octet1 === 127) return { safe: false, reason: 'Loopback IP space is restricted.' };
+    // Check port (allow standard HTTP/HTTPS and common public dev web ports)
+    const allowedPorts = new Set(['', '80', '443', '8080', '8443', '3000', '8000']);
+    if (parsed.port && !allowedPorts.has(parsed.port)) {
+      return { safe: false, reason: `Port ${parsed.port} is not permitted. Only standard web ports (80, 443, 8080, 8443) are allowed.` };
     }
 
-    // Normalization: Ensure HTTPS if not specified, strip hash and trailing slash unless root
+    // Check direct IP address literal
+    if (isPrivateOrReservedIp(host)) {
+      return { safe: false, reason: 'Private, loopback, link-local, or cloud metadata IP ranges are blocked for SSRF security.' };
+    }
+
+    // Check integer/hex encoded IPs (e.g., http://2130706433 or http://0x7f000001)
+    if (/^\d+$/.test(host) || /^0x[0-9a-fA-F]+$/.test(host)) {
+      return { safe: false, reason: 'Numeric or hex-encoded IP addresses are prohibited.' };
+    }
+
+    // Normalization: Ensure valid origin, strip hash and trailing slash unless root
     let normalized = parsed.origin + (parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, ''));
     if (parsed.search) normalized += parsed.search;
 
     return { safe: true, normalizedUrl: normalized };
   } catch (err: any) {
     return { safe: false, reason: 'Invalid URL format.' };
+  }
+}
+
+// SSRF Protection: Asynchronous URL + DNS resolution validation
+export async function validateSafePublicUrlWithDns(
+  inputUrl: string
+): Promise<{ safe: boolean; reason?: string; normalizedUrl?: string; resolvedIps?: string[] }> {
+  const syncCheck = isSafePublicUrl(inputUrl);
+  if (!syncCheck.safe || !syncCheck.normalizedUrl) {
+    return syncCheck;
+  }
+
+  const parsed = new URL(syncCheck.normalizedUrl);
+  const host = parsed.hostname.toLowerCase();
+
+  // If host is already an IP, it passed sync check, but double check
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(':')) {
+    if (isPrivateOrReservedIp(host)) {
+      return { safe: false, reason: 'Target IP is within a restricted private or reserved network range.' };
+    }
+    return { safe: true, normalizedUrl: syncCheck.normalizedUrl, resolvedIps: [host] };
+  }
+
+  // Resolve DNS to verify all returned IPs are public
+  try {
+    const lookupResults = await dns.promises.lookup(host, { all: true });
+    if (!lookupResults || lookupResults.length === 0) {
+      return { safe: false, reason: `Unable to resolve hostname "${host}".` };
+    }
+
+    const resolvedIps = lookupResults.map((r) => r.address);
+    for (const resIp of resolvedIps) {
+      if (isPrivateOrReservedIp(resIp)) {
+        return {
+          safe: false,
+          reason: `DNS resolution for "${host}" resolves to a restricted private or cloud metadata IP (${resIp}). Request blocked for SSRF security.`,
+        };
+      }
+    }
+
+    return { safe: true, normalizedUrl: syncCheck.normalizedUrl, resolvedIps };
+  } catch (dnsErr: any) {
+    return { safe: false, reason: `DNS resolution failed for "${host}": ${dnsErr.message || 'Host not found'}` };
   }
 }
 

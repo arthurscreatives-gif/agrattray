@@ -213,6 +213,27 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["userId", "provider", "isConnected"]
+    },
+    "PageSpeedTestRun": {
+      "title": "PageSpeedTestRun",
+      "description": "Google PageSpeed Insights test result for a landing page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "userId": { "type": "string" },
+        "url": { "type": "string" },
+        "pageLabel": { "type": "string" },
+        "strategy": { "type": "string" },
+        "scores": { "type": "object" },
+        "metrics": { "type": "object" },
+        "opportunities": { "type": "array" },
+        "diagnostics": { "type": "array" },
+        "coreWebVitalsStatus": { "type": "string" },
+        "fetchedAt": { "type": "string" },
+        "provider": { "type": "string" }
+      },
+      "required": ["id", "websiteId", "userId", "url", "strategy", "scores", "metrics", "fetchedAt"]
     }
   },
   "firestore": {
@@ -251,6 +272,10 @@
     "/users/{userId}/websites/{websiteId}/seo_tasks/{taskId}": {
       "schema": "SeoTask",
       "description": "Actionable SEO tasks for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/pagespeed_tests/{testId}": {
+      "schema": "PageSpeedTestRun",
+      "description": "Google PageSpeed performance audit results"
     },
     "/users/{userId}/integrations/{integrationId}": {
       "schema": "IntegrationSetting",
