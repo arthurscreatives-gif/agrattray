@@ -1,0 +1,260 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile and preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "monthlySpendingLimit": { "type": "number" },
+        "emergencyKillswitch": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "email"]
+    },
+    "Website": {
+      "title": "Website",
+      "description": "A managed website property for SEO tracking and auditing",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "platform": { "type": "string" },
+        "businessName": { "type": "string" },
+        "businessDescription": { "type": "string" },
+        "primaryServices": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "primaryCity": { "type": "string" },
+        "primaryRegion": { "type": "string" },
+        "country": { "type": "string" },
+        "primaryLanguage": { "type": "string" },
+        "sitemapUrl": { "type": "string" },
+        "gscProperty": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "lastAuditDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "name", "url"]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "A discovered or crawled website page with on-page SEO metrics",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "url": { "type": "string" },
+        "path": { "type": "string" },
+        "statusCode": { "type": "number" },
+        "title": { "type": "string" },
+        "metaDescription": { "type": "string" },
+        "h1": { "type": "string" },
+        "wordCount": { "type": "number" },
+        "isIndexable": { "type": "boolean" },
+        "canonicalUrl": { "type": "string" },
+        "hasOgTags": { "type": "boolean" },
+        "hasJsonLd": { "type": "boolean" },
+        "lastCrawledAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "url"]
+    },
+    "AuditRun": {
+      "title": "AuditRun",
+      "description": "Historical crawl audit run summary and score breakdown",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "healthScore": { "type": "number" },
+        "techScore": { "type": "number" },
+        "contentScore": { "type": "number" },
+        "metaScore": { "type": "number" },
+        "socialScore": { "type": "number" },
+        "totalPages": { "type": "number" },
+        "criticalCount": { "type": "number" },
+        "warningCount": { "type": "number" },
+        "opportunityCount": { "type": "number" },
+        "passedCount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "healthScore"]
+    },
+    "AuditIssue": {
+      "title": "AuditIssue",
+      "description": "A specific SEO audit issue with impact, explanation, and recommendation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "auditRunId": { "type": "string" },
+        "type": { "type": "string" },
+        "category": { "type": "string" },
+        "severity": { "type": "string" },
+        "title": { "type": "string" },
+        "explanation": { "type": "string" },
+        "whyItMatters": { "type": "string" },
+        "recommendedAction": { "type": "string" },
+        "proposedCorrection": { "type": "string" },
+        "priority": { "type": "string" },
+        "impact": { "type": "string" },
+        "effort": { "type": "string" },
+        "status": { "type": "string" },
+        "affectedPagesCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "title", "severity", "category"]
+    },
+    "Keyword": {
+      "title": "Keyword",
+      "description": "Tracked or researched target keyword",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "term": { "type": "string" },
+        "searchVolume": { "type": "number" },
+        "competition": { "type": "number" },
+        "cpc": { "type": "number" },
+        "intent": { "type": "string" },
+        "opportunityScore": { "type": "number" },
+        "currentRank": { "type": "number" },
+        "targetRank": { "type": "number" },
+        "isPrimary": { "type": "boolean" },
+        "assignedPageUrl": { "type": "string" },
+        "location": { "type": "string" },
+        "language": { "type": "string" },
+        "device": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "term"]
+    },
+    "Competitor": {
+      "title": "Competitor",
+      "description": "Competitor domain profile for gap and overlap analysis",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "domain": { "type": "string" },
+        "name": { "type": "string" },
+        "notes": { "type": "string" },
+        "overlapScore": { "type": "number" },
+        "sharedKeywords": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "domain"]
+    },
+    "Recommendation": {
+      "title": "Recommendation",
+      "description": "Actionable SEO recommendation with proposed corrections",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "pageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "issue": { "type": "string" },
+        "currentValue": { "type": "string" },
+        "proposedValue": { "type": "string" },
+        "reason": { "type": "string" },
+        "expectedBenefit": { "type": "string" },
+        "priority": { "type": "string" },
+        "effort": { "type": "string" },
+        "source": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "issue", "proposedValue"]
+    },
+    "SeoTask": {
+      "title": "SeoTask",
+      "description": "Task management item for executing on-page and technical fixes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "pageUrl": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "notes": { "type": "string" },
+        "beforeValue": { "type": "string" },
+        "proposedValue": { "type": "string" },
+        "finalAppliedValue": { "type": "string" },
+        "verificationResult": { "type": "string" },
+        "completionDate": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "websiteId", "title", "status"]
+    },
+    "IntegrationSetting": {
+      "title": "IntegrationSetting",
+      "description": "Masked metadata and connection state for external providers",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "provider": { "type": "string" },
+        "isConnected": { "type": "boolean" },
+        "lastTested": { "type": "string" },
+        "lastSynced": { "type": "string" },
+        "statusMessage": { "type": "string" },
+        "maskedIdentifier": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "provider", "isConnected"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/websites/{websiteId}": {
+      "schema": "Website",
+      "description": "Managed websites belonging to user"
+    },
+    "/users/{userId}/websites/{websiteId}/pages/{pageId}": {
+      "schema": "Page",
+      "description": "Discovered pages of a website"
+    },
+    "/users/{userId}/websites/{websiteId}/audit_runs/{auditRunId}": {
+      "schema": "AuditRun",
+      "description": "Crawl audit runs for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/audit_issues/{issueId}": {
+      "schema": "AuditIssue",
+      "description": "Audit findings and issues for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/keywords/{keywordId}": {
+      "schema": "Keyword",
+      "description": "Keywords tracked for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/competitors/{competitorId}": {
+      "schema": "Competitor",
+      "description": "Competitor profiles for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/recommendations/{recommendationId}": {
+      "schema": "Recommendation",
+      "description": "Actionable SEO recommendations for a website"
+    },
+    "/users/{userId}/websites/{websiteId}/seo_tasks/{taskId}": {
+      "schema": "SeoTask",
+      "description": "Actionable SEO tasks for a website"
+    },
+    "/users/{userId}/integrations/{integrationId}": {
+      "schema": "IntegrationSetting",
+      "description": "Config state for user integrations"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Root test collection for connectivity testing
+    match /test/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // User profile and subcollections
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) && isValidId(userId);
+
+      match /websites/{websiteId} {
+        allow read, write: if isOwner(userId) && isValidId(websiteId);
+
+        match /pages/{pageId} {
+          allow read, write: if isOwner(userId) && isValidId(pageId);
+        }
+
+        match /audit_runs/{auditRunId} {
+          allow read, write: if isOwner(userId) && isValidId(auditRunId);
+        }
+
+        match /audit_issues/{issueId} {
+          allow read, write: if isOwner(userId) && isValidId(issueId);
+        }
+
+        match /keywords/{keywordId} {
+          allow read, write: if isOwner(userId) && isValidId(keywordId);
+        }
+
+        match /competitors/{competitorId} {
+          allow read, write: if isOwner(userId) && isValidId(competitorId);
+        }
+
+        match /recommendations/{recommendationId} {
+          allow read, write: if isOwner(userId) && isValidId(recommendationId);
+        }
+
+        match /seo_tasks/{taskId} {
+          allow read, write: if isOwner(userId) && isValidId(taskId);
+        }
+      }
+
+      match /integrations/{integrationId} {
+        allow read, write: if isOwner(userId) && isValidId(integrationId);
+      }
+    }
+  }
+}
