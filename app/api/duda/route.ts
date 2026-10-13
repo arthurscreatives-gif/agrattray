@@ -8,7 +8,10 @@ import {
   maskDudaUser,
   testDudaConnection,
   executeDudaRequest,
+  verifyDudaLiveSite,
+  generateDudaSeoBlock,
   DudaEnvironment,
+  DudaPublishMode,
   DudaPageSeoPayload,
 } from '@/lib/duda-server';
 
@@ -118,21 +121,26 @@ export async function GET(req: NextRequest) {
   try {
     const creds = getStoredDudaCredentials();
     const settings = getDudaSettings();
+    const isAssistedMode = settings.publishMode === 'assisted_manual';
 
     return NextResponse.json({
       success: true,
       provider: 'duda',
-      name: 'Duda Website Builder & Publishing API',
-      isConnected: !!creds && settings.isConnected,
+      name: 'Duda Website Builder & SEO Publishing Hub',
+      publishMode: settings.publishMode,
+      noApiKeyRequired: isAssistedMode,
+      isConnected: isAssistedMode ? true : !!creds && settings.isConnected,
       environment: creds?.environment || settings.environment || 'production',
       maskedUser: creds ? maskDudaUser(creds.apiUser) : '',
       hasCredentials: !!creds,
       activeSiteName: settings.activeSiteName || 'arthurscreatives',
       primaryDomain: settings.primaryDomain || 'arthurscreatives.com',
+      sitemapUrl: settings.sitemapUrl || 'https://arthurscreatives.com/sitemap.xml',
+      siteVerified: settings.siteVerified !== false,
       lastTested: settings.lastTested,
       lastSynced: settings.lastSynced,
-      siteCount: settings.siteCount || 0,
-      statusMessage: settings.statusMessage,
+      siteCount: settings.siteCount || 1,
+      statusMessage: settings.statusMessage || (isAssistedMode ? 'Assisted Publishing Active (No API Key Required)' : 'Partner API Configured'),
       mostRecentError: settings.mostRecentError,
       updatedAt: creds?.updatedAt || null,
     });
@@ -146,7 +154,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/duda
- * Handles credentials management, connection diagnostics, site listings, and SEO sync actions.
+ * Handles credentials management, connection diagnostics, site listings, assisted publishing, and SEO sync actions.
  */
 export async function POST(req: NextRequest) {
   const authCheck = await verifyOwnerAuth(req);
@@ -160,12 +168,97 @@ export async function POST(req: NextRequest) {
 
     if (!action) {
       return NextResponse.json(
-        { error: 'Action parameter is required. (e.g., save_credentials, test_connection, list_sites, update_page_seo)' },
+        { error: 'Action parameter is required. (e.g., verify_live_site, save_assisted_config, generate_duda_pack, save_credentials, test_connection)' },
         { status: 400 }
       );
     }
 
     switch (action) {
+      // 0. VERIFY LIVE DUDA SITE (No API Key Needed!)
+      case 'verify_live_site': {
+        const domain = body.domain || getDudaSettings().primaryDomain || 'arthurscreatives.com';
+        const verifyResult = await verifyDudaLiveSite(domain);
+
+        const now = new Date().toISOString();
+        if (verifyResult.success) {
+          saveDudaSettings({
+            publishMode: 'assisted_manual',
+            isConnected: true,
+            primaryDomain: verifyResult.domain,
+            sitemapUrl: verifyResult.sitemapUrl,
+            siteVerified: true,
+            siteResponseCode: verifyResult.status,
+            lastTested: now,
+            mostRecentError: null,
+            statusMessage: 'Live Site & Sitemap Verified (Assisted Mode Active)',
+          });
+
+          return NextResponse.json({
+            success: true,
+            message: `Verified ${verifyResult.domain} (HTTP ${verifyResult.status}). Sitemap reachable. No API key required!`,
+            verification: verifyResult,
+          });
+        } else {
+          saveDudaSettings({
+            lastTested: now,
+            siteVerified: false,
+            mostRecentError: verifyResult.error || 'Site ping failed',
+          });
+
+          return NextResponse.json({
+            success: false,
+            error: verifyResult.error || 'Unable to connect to live site.',
+            verification: verifyResult,
+          }, { status: 400 });
+        }
+      }
+
+      // 0.1 SAVE ASSISTED CONFIGURATION (Domain & Sitemap)
+      case 'save_assisted_config': {
+        const { primaryDomain, sitemapUrl, activeSiteName, publishMode = 'assisted_manual' } = body;
+
+        const cleanDomain = primaryDomain
+          ? primaryDomain.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').trim().toLowerCase()
+          : 'arthurscreatives.com';
+
+        saveDudaSettings({
+          publishMode: publishMode as DudaPublishMode,
+          isConnected: true,
+          primaryDomain: cleanDomain,
+          sitemapUrl: sitemapUrl || `https://${cleanDomain}/sitemap.xml`,
+          activeSiteName: activeSiteName || cleanDomain.split('.')[0],
+          statusMessage: 'Assisted Publishing Active (No API Key Required)',
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: 'Duda Assisted Publishing configuration saved.',
+          settings: getDudaSettings(),
+        });
+      }
+
+      // 0.2 GENERATE DUDA COPY-PASTE SEO PACK
+      case 'generate_duda_pack': {
+        const { title, description, canonicalUrl, noIndex, ogTitle, ogDescription, schemaJson } = body;
+        if (!title || !description) {
+          return NextResponse.json({ error: 'Both title and description are required.' }, { status: 400 });
+        }
+
+        const pack = generateDudaSeoBlock({
+          title,
+          description,
+          canonicalUrl,
+          noIndex,
+          ogTitle,
+          ogDescription,
+          schemaJson,
+        });
+
+        return NextResponse.json({
+          success: true,
+          dudaPack: pack,
+        });
+      }
       // 1. SAVE CREDENTIALS
       case 'save_credentials': {
         const { apiUser, apiPass, environment = 'production', activeSiteName, primaryDomain } = body;

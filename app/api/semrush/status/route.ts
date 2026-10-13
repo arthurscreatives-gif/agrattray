@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
             lastTested: new Date().toISOString(),
             cachedUnits: testRes.units ?? null,
             mostRecentError: null,
-            statusMessage: 'Connected & Verified',
+            statusMessage: testRes.statusMessage || (testRes.isStaged ? 'Token Staged (Subscription Starting Soon)' : 'Connected & Verified'),
           });
         } else {
           saveSemrushSettings({

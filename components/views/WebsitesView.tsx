@@ -433,7 +433,7 @@ export default function WebsitesView({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="custom">Custom Web Stack</option>
-                    <option value="duda">Duda</option>
+                    <option value="duda">Duda (Assisted Mode - No API Key Needed)</option>
                     <option value="wix">Wix</option>
                     <option value="shopify">Shopify</option>
                     <option value="wordpress">WordPress</option>

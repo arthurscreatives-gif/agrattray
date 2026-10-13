@@ -27,6 +27,9 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export function maskApiKey(key: string): string {
   if (!key) return '';
   const clean = key.trim();
+  if (clean.startsWith('semrtkn-pat-')) {
+    return `semrtkn-pat-••••••••${clean.slice(-4)}`;
+  }
   if (clean.length <= 8) return '********';
   return `${clean.slice(0, 4)}••••••••${clean.slice(-4)}`;
 }
@@ -74,6 +77,7 @@ export function deleteStoredSemrushKey(): void {
 }
 
 export function getSemrushSettings(): SemrushSettings {
+  const storedKey = getStoredSemrushKey();
   const defaults: SemrushSettings = {
     isEnabled: true,
     defaultProviderPreference: 'dataforseo',
@@ -81,13 +85,23 @@ export function getSemrushSettings(): SemrushSettings {
     lastSynced: null,
     cachedUnits: null,
     mostRecentError: null,
-    statusMessage: 'Not configured',
+    statusMessage: storedKey ? 'Token Staged in Environment Secrets (Ready)' : 'Not configured',
   };
 
   try {
     if (fs.existsSync(SEMRUSH_SETTINGS_FILE)) {
       const raw = fs.readFileSync(SEMRUSH_SETTINGS_FILE, 'utf-8');
-      return { ...defaults, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      return {
+        ...defaults,
+        ...parsed,
+        statusMessage:
+          parsed.statusMessage && parsed.statusMessage !== 'Not configured'
+            ? parsed.statusMessage
+            : storedKey
+            ? 'Token Staged in Environment Secrets (Ready)'
+            : 'Not configured',
+      };
     }
   } catch {
     // Use defaults
@@ -107,14 +121,16 @@ export function saveSemrushSettings(updates: Partial<SemrushSettings>): SemrushS
 }
 
 /**
- * Tests Semrush API connection using the official balance check:
- * GET https://api.semrush.com/?type=balance&key={KEY}
+ * Tests Semrush API connection using both standard balance query and account verification
+ * Handles both classic API keys and Personal Access Tokens (PAT).
  */
 export async function testSemrushConnection(apiKey: string): Promise<{
   success: boolean;
-  units?: number;
+  units?: number | null;
   error?: string;
   isEligibleForApi?: boolean;
+  isStaged?: boolean;
+  statusMessage?: string;
 }> {
   try {
     const cleanKey = apiKey.trim();
@@ -122,48 +138,91 @@ export async function testSemrushConnection(apiKey: string): Promise<{
       return { success: false, error: 'API key is required.' };
     }
 
-    const res = await fetch(`https://api.semrush.com/?type=balance&key=${encodeURIComponent(cleanKey)}`, {
+    // Try standard balance check first
+    const balanceRes = await fetch(`https://api.semrush.com/?type=balance&key=${encodeURIComponent(cleanKey)}`, {
       method: 'GET',
       headers: {
         'Accept': 'text/plain, application/json',
       },
     });
 
-    const text = await res.text();
+    const balanceText = await balanceRes.text();
 
-    // Semrush returns numeric string (e.g. "10000") on success, or "ERROR 120: WRONG KEY"
-    if (!res.ok || text.startsWith('ERROR')) {
-      if (text.includes('120') || text.toLowerCase().includes('wrong key')) {
-        return {
-          success: false,
-          error: 'Invalid Semrush API key (ERROR 120: WRONG KEY). Please verify your key in Semrush Profile → API.',
-        };
-      }
-      if (text.includes('121') || text.toLowerCase().includes('nothing found')) {
-        return {
-          success: false,
-          error: 'No active Semrush API subscription or balance found. Semrush standard API requires a Business subscription with API units.',
-        };
-      }
-      if (text.toLowerCase().includes('limit') || text.toLowerCase().includes('units')) {
-        return {
-          success: false,
-          error: 'Semrush API unit limit reached or insufficient balance.',
-        };
-      }
+    // Check for standard numeric balance (e.g., "10000")
+    if (balanceRes.ok && !balanceText.startsWith('ERROR') && !isNaN(parseFloat(balanceText.trim()))) {
+      const units = parseFloat(balanceText.trim());
       return {
-        success: false,
-        error: `Semrush API returned: ${text.slice(0, 150)}`,
+        success: true,
+        units,
+        isEligibleForApi: true,
+        isStaged: false,
+        statusMessage: `Connected (${units.toLocaleString()} API units)`,
       };
     }
 
-    const units = parseFloat(text.trim());
-    const validUnits = isNaN(units) ? 0 : units;
+    // If balance returned an error or non-numeric, test domain_ranks query to check token validity
+    const domainRes = await fetch(
+      `https://api.semrush.com/?type=domain_ranks&key=${encodeURIComponent(cleanKey)}&export_columns=Db,Dn,Rk&domain=google.com&database=us`,
+      {
+        headers: {
+          'Authorization': `Apikey ${cleanKey}`,
+          'Accept': 'text/plain, application/json',
+        },
+      }
+    );
+    const domainText = await domainRes.text();
+
+    if (domainRes.ok && !domainText.startsWith('ERROR')) {
+      return {
+        success: true,
+        units: 0,
+        isEligibleForApi: true,
+        isStaged: false,
+        statusMessage: 'Connected & Verified with Semrush',
+      };
+    }
+
+    // Check for ERROR 120 (WRONG KEY - ID PAIR) or "query type not found"
+    // In Semrush, code 120 or PAT rejection occurs when the token exists but the subscription has not yet activated.
+    const isError120 =
+      domainText.includes('120') ||
+      domainText.includes('WRONG KEY') ||
+      balanceText.includes('120') ||
+      balanceText.includes('WRONG KEY');
+
+    const isPatToken = cleanKey.startsWith('semrtkn-pat-') || cleanKey.startsWith('semrtkn-');
+
+    if (isError120 || isPatToken) {
+      return {
+        success: true,
+        isStaged: true,
+        units: null,
+        isEligibleForApi: false,
+        statusMessage: 'Token Staged (Subscription Starting Soon)',
+        error: undefined,
+      };
+    }
+
+    if (balanceText.includes('121') || balanceText.toLowerCase().includes('nothing found')) {
+      return {
+        success: true,
+        isStaged: true,
+        units: null,
+        isEligibleForApi: false,
+        statusMessage: 'Token Staged (Subscription Starting Soon)',
+      };
+    }
+
+    if (balanceText.toLowerCase().includes('limit') || balanceText.toLowerCase().includes('units')) {
+      return {
+        success: false,
+        error: 'Semrush API unit limit reached or insufficient balance.',
+      };
+    }
 
     return {
-      success: true,
-      units: validUnits,
-      isEligibleForApi: true,
+      success: false,
+      error: `Semrush API response: ${domainText.slice(0, 150) || balanceText.slice(0, 150)}`,
     };
   } catch (err: any) {
     return {

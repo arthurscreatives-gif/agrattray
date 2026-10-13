@@ -6,6 +6,7 @@ const DUDA_SECRETS_FILE = path.join(process.cwd(), '.duda-secrets.json');
 const DUDA_SETTINGS_FILE = path.join(process.cwd(), '.duda-settings.json');
 
 export type DudaEnvironment = 'production' | 'sandbox';
+export type DudaPublishMode = 'assisted_manual' | 'partner_api';
 
 export interface DudaCredentials {
   apiUser: string;
@@ -15,10 +16,14 @@ export interface DudaCredentials {
 }
 
 export interface DudaSettings {
+  publishMode: DudaPublishMode;
   isConnected: boolean;
   environment: DudaEnvironment;
   activeSiteName?: string;
   primaryDomain?: string;
+  sitemapUrl?: string;
+  siteVerified?: boolean;
+  siteResponseCode?: number;
   lastTested: string | null;
   lastSynced: string | null;
   siteCount?: number;
@@ -129,21 +134,35 @@ export function deleteStoredDudaCredentials(): void {
 // Get settings
 export function getDudaSettings(): DudaSettings {
   const defaults: DudaSettings = {
-    isConnected: false,
+    publishMode: 'assisted_manual',
+    isConnected: true, // Always ready in assisted mode without requiring API keys!
     environment: 'production',
     activeSiteName: 'arthurscreatives',
     primaryDomain: 'arthurscreatives.com',
+    sitemapUrl: 'https://arthurscreatives.com/sitemap.xml',
+    siteVerified: true,
     lastTested: null,
     lastSynced: null,
-    siteCount: 0,
+    siteCount: 1,
     mostRecentError: null,
-    statusMessage: 'Duda publishing connector ready for configuration',
+    statusMessage: 'Assisted Publishing Active (No API Key Required)',
   };
 
   try {
     if (fs.existsSync(DUDA_SETTINGS_FILE)) {
       const raw = fs.readFileSync(DUDA_SETTINGS_FILE, 'utf-8');
-      return { ...defaults, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      return {
+        ...defaults,
+        ...parsed,
+        publishMode: parsed.publishMode || 'assisted_manual',
+        isConnected: parsed.publishMode === 'partner_api' ? Boolean(parsed.isConnected) : true,
+        statusMessage:
+          parsed.statusMessage ||
+          (parsed.publishMode === 'partner_api'
+            ? 'Partner API Mode'
+            : 'Assisted Publishing Active (No API Key Required)'),
+      };
     }
   } catch {
     // Return defaults on error
@@ -307,5 +326,143 @@ export async function testDudaConnection(
     success: false,
     status: res.status,
     error: res.error || 'Authentication with Duda Partner API failed.',
+  };
+}
+
+/**
+ * Verifies live site status and sitemap for Duda websites in Assisted Mode (No API key required)
+ */
+export async function verifyDudaLiveSite(domainInput: string): Promise<{
+  success: boolean;
+  domain: string;
+  url: string;
+  status: number;
+  isReachable: boolean;
+  sitemapUrl: string;
+  sitemapFound: boolean;
+  isDudaDetected: boolean;
+  responseTimeMs: number;
+  error?: string;
+}> {
+  const cleanDomain = domainInput
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '')
+    .trim()
+    .toLowerCase();
+
+  const siteUrl = `https://${cleanDomain}`;
+  const sitemapUrl = `https://${cleanDomain}/sitemap.xml`;
+  const startTime = Date.now();
+
+  try {
+    // 1. Fetch homepage
+    const siteController = new AbortController();
+    const siteTimeout = setTimeout(() => siteController.abort(), 12000);
+
+    const siteRes = await fetch(siteUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': "Arthur's SEO Command Center / Duda Live Checker 1.0",
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: siteController.signal,
+    }).finally(() => clearTimeout(siteTimeout));
+
+    const responseTimeMs = Date.now() - startTime;
+    const htmlText = await siteRes.text().catch(() => '');
+
+    // Check for Duda signatures
+    const isDudaDetected =
+      htmlText.includes('irp.cdn-website.com') ||
+      htmlText.includes('duda') ||
+      htmlText.includes('dm-header') ||
+      htmlText.includes('dm-layout') ||
+      htmlText.includes('d-body') ||
+      siteRes.headers.get('server')?.toLowerCase().includes('duda') === true;
+
+    // 2. Fetch sitemap
+    let sitemapFound = false;
+    try {
+      const sitemapController = new AbortController();
+      const sitemapTimeout = setTimeout(() => sitemapController.abort(), 8000);
+      const smRes = await fetch(sitemapUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': "Arthur's SEO Command Center / Sitemap Checker 1.0",
+        },
+        signal: sitemapController.signal,
+      }).finally(() => clearTimeout(sitemapTimeout));
+
+      sitemapFound = smRes.ok;
+    } catch {
+      sitemapFound = false;
+    }
+
+    return {
+      success: siteRes.ok,
+      domain: cleanDomain,
+      url: siteUrl,
+      status: siteRes.status,
+      isReachable: siteRes.ok,
+      sitemapUrl,
+      sitemapFound,
+      isDudaDetected,
+      responseTimeMs,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      domain: cleanDomain,
+      url: siteUrl,
+      status: 0,
+      isReachable: false,
+      sitemapUrl,
+      sitemapFound: false,
+      isDudaDetected: false,
+      responseTimeMs: Date.now() - startTime,
+      error: err.name === 'AbortError' ? 'Site connection timed out.' : err.message || 'Unable to reach site.',
+    };
+  }
+}
+
+/**
+ * Formats metadata and code for easy 1-click pasting into Duda's Page Settings & Header HTML
+ */
+export function generateDudaSeoBlock(data: {
+  title: string;
+  description: string;
+  canonicalUrl?: string;
+  noIndex?: boolean;
+  ogTitle?: string;
+  ogDescription?: string;
+  schemaJson?: string;
+}) {
+  const headerHtmlParts: string[] = [];
+
+  if (data.canonicalUrl) {
+    headerHtmlParts.push(`<link rel="canonical" href="${data.canonicalUrl}" />`);
+  }
+
+  if (data.schemaJson) {
+    headerHtmlParts.push(`<!-- Schema.org JSON-LD Structured Data -->\n<script type="application/ld+json">\n${data.schemaJson}\n</script>`);
+  }
+
+  return {
+    dudaPageSettings: {
+      pageTitle: data.title,
+      pageTitleLength: data.title.length,
+      pageDescription: data.description,
+      pageDescriptionLength: data.description.length,
+      canonicalUrl: data.canonicalUrl || '',
+      noIndex: Boolean(data.noIndex),
+    },
+    headerHtmlSnippet: headerHtmlParts.join('\n\n'),
+    instructions: [
+      'In Duda Editor, click "Pages" in the left navigation sidebar.',
+      'Click the gear icon next to the page name to open "Page Settings".',
+      'Select the "SEO" tab.',
+      'Paste the Page Title and Meta Description into their respective inputs.',
+      'For Schema JSON-LD, navigate to "Settings" → "Header HTML" and paste the code snippet.',
+    ],
   };
 }

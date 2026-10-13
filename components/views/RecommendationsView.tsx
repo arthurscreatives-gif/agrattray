@@ -42,6 +42,8 @@ export default function RecommendationsView({
   const [genResult, setGenResult] = useState<any | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [dudaModalRec, setDudaModalRec] = useState<SeoRecommendation | null>(null);
+  const [dudaCopiedField, setDudaCopiedField] = useState<string | null>(null);
 
   const websiteRecs = recommendations.filter((r) => r.websiteId === activeWebsite?.id);
 
@@ -49,6 +51,12 @@ export default function RecommendationsView({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyDudaField = (field: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setDudaCopiedField(field);
+    setTimeout(() => setDudaCopiedField(null), 2000);
   };
 
   const handleRunGenerator = async () => {
@@ -283,13 +291,22 @@ export default function RecommendationsView({
                 </button>
               </div>
 
-              <button
-                onClick={() => onCreateTaskFromRecommendation(rec)}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Add to SEO Tasks</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDudaModalRec(rec)}
+                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Copy for Duda</span>
+                </button>
+                <button
+                  onClick={() => onCreateTaskFromRecommendation(rec)}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Add to SEO Tasks</span>
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -486,6 +503,99 @@ export default function RecommendationsView({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duda 1-Click Copy Modal */}
+      {dudaModalRec && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 font-bold text-xs">
+                  Duda
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Copy for Duda Website Editor</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Target Page: <code className="text-purple-700 font-semibold">{dudaModalRec.pageUrl}</code>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDudaModalRec(null)}
+                className="text-slate-400 hover:text-slate-600 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 space-y-1">
+              <span className="font-bold flex items-center gap-1 text-[11px] uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                Where To Paste In Duda:
+              </span>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                {dudaModalRec.category === 'schema'
+                  ? 'In Duda Editor: Go to Settings → Header HTML (or Page Settings → Header HTML) and paste the code snippet below.'
+                  : 'In Duda Editor: Click Pages in left toolbar → gear icon next to page → SEO tab → Paste into Title or Description.'}
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase">
+                    {dudaModalRec.category === 'schema' ? 'Schema JSON-LD Code' : 'Proposed Value'}
+                  </label>
+                  <button
+                    onClick={() => handleCopyDudaField('proposedValue', dudaModalRec.proposedValue)}
+                    className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 text-[11px]"
+                  >
+                    {dudaCopiedField === 'proposedValue' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{dudaCopiedField === 'proposedValue' ? 'Copied to Clipboard!' : 'Copy Value'}</span>
+                  </button>
+                </div>
+                <pre className="bg-slate-900 text-purple-300 p-3.5 rounded-xl font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-48">
+                  {dudaModalRec.proposedValue}
+                </pre>
+                <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
+                  <span>Length: {dudaModalRec.proposedValue.length} characters</span>
+                  <span>{dudaModalRec.category === 'title' ? 'Target: 50-60' : dudaModalRec.category === 'description' ? 'Target: 135-155' : 'Valid JSON-LD'}</span>
+                </div>
+              </div>
+
+              {dudaModalRec.category === 'schema' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase">
+                      Header HTML Embed Code (with &lt;script&gt;)
+                    </label>
+                    <button
+                      onClick={() => handleCopyDudaField('scriptTag', `<script type="application/ld+json">\n${dudaModalRec.proposedValue}\n</script>`)}
+                      className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 text-[11px]"
+                    >
+                      {dudaCopiedField === 'scriptTag' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{dudaCopiedField === 'scriptTag' ? 'Copied Tag!' : 'Copy Script Tag'}</span>
+                    </button>
+                  </div>
+                  <pre className="bg-slate-900 text-emerald-400 p-3 rounded-xl font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-36">
+                    {`<script type="application/ld+json">\n${dudaModalRec.proposedValue}\n</script>`}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex items-center justify-between border-t border-slate-100 text-xs">
+              <span className="text-[11px] text-slate-500">No Duda API key required</span>
+              <button
+                onClick={() => setDudaModalRec(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

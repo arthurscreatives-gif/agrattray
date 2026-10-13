@@ -21,19 +21,24 @@ export async function POST(req: NextRequest) {
     const result = await testSemrushConnection(keyToTest);
 
     if (result.success) {
+      const statusMsg = result.statusMessage || (result.isStaged ? 'Token Staged (Subscription Starting Soon)' : 'Connected & Verified');
       saveSemrushSettings({
         lastTested: new Date().toISOString(),
         cachedUnits: result.units ?? null,
         mostRecentError: null,
-        statusMessage: 'Connected & Verified',
+        statusMessage: statusMsg,
       });
 
       return NextResponse.json({
         success: true,
-        status: 'Connected',
+        status: result.isStaged ? 'Staged' : 'Connected',
+        isStaged: result.isStaged ?? false,
+        statusMessage: statusMsg,
         maskedKey: maskApiKey(keyToTest),
-        units: result.units ?? 0,
-        unitsDisplay: `${(result.units ?? 0).toLocaleString()} API units`,
+        units: result.units ?? null,
+        unitsDisplay: result.units !== null && result.units !== undefined
+          ? `${result.units.toLocaleString()} API units`
+          : 'Staged for subscription start',
         dateRetrieved: new Date().toISOString(),
         provider: 'Semrush',
       });
