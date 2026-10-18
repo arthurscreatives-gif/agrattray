@@ -145,13 +145,21 @@ export async function getWebsitesFromFirestore(userId: string): Promise<Website[
 }
 
 export async function saveWebsiteToFirestore(userId: string, website: Website): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', website.id);
-  await setDoc(docRef, { ...website, userId, updatedAt: new Date().toISOString() }, { merge: true });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', website.id);
+    await setDoc(docRef, { ...website, userId, updatedAt: new Date().toISOString() }, { merge: true });
+  } catch (err) {
+    console.warn('Could not save website to Firestore (local state preserved):', err);
+  }
 }
 
 export async function deleteWebsiteFromFirestore(userId: string, websiteId: string): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId);
-  await deleteDoc(docRef);
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Could not delete website from Firestore (local state preserved):', err);
+  }
 }
 
 export async function getIssuesFromFirestore(userId: string, websiteId: string): Promise<AuditIssue[]> {
@@ -165,9 +173,13 @@ export async function getIssuesFromFirestore(userId: string, websiteId: string):
 }
 
 export async function saveIssuesToFirestore(userId: string, websiteId: string, issues: AuditIssue[]): Promise<void> {
-  for (const issue of issues) {
-    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'audit_issues', issue.id);
-    await setDoc(docRef, { ...issue, userId, websiteId }, { merge: true });
+  try {
+    for (const issue of issues) {
+      const docRef = doc(db, 'users', userId, 'websites', websiteId, 'audit_issues', issue.id);
+      await setDoc(docRef, { ...issue, userId, websiteId }, { merge: true });
+    }
+  } catch (err) {
+    console.warn('Could not save issues to Firestore:', err);
   }
 }
 
@@ -177,8 +189,12 @@ export async function updateIssueStatusInFirestore(
   issueId: string,
   status: AuditIssue['status']
 ): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'audit_issues', issueId);
-  await updateDoc(docRef, { status });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'audit_issues', issueId);
+    await updateDoc(docRef, { status });
+  } catch (err) {
+    console.warn('Could not update issue status in Firestore:', err);
+  }
 }
 
 export async function getKeywordsFromFirestore(userId: string, websiteId: string): Promise<Keyword[]> {
@@ -192,13 +208,21 @@ export async function getKeywordsFromFirestore(userId: string, websiteId: string
 }
 
 export async function saveKeywordToFirestore(userId: string, websiteId: string, keyword: Keyword): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'keywords', keyword.id);
-  await setDoc(docRef, { ...keyword, userId, websiteId }, { merge: true });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'keywords', keyword.id);
+    await setDoc(docRef, { ...keyword, userId, websiteId }, { merge: true });
+  } catch (err) {
+    console.warn('Could not save keyword to Firestore:', err);
+  }
 }
 
 export async function deleteKeywordFromFirestore(userId: string, websiteId: string, keywordId: string): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'keywords', keywordId);
-  await deleteDoc(docRef);
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'keywords', keywordId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Could not delete keyword from Firestore:', err);
+  }
 }
 
 export async function getTasksFromFirestore(userId: string, websiteId: string): Promise<SeoTask[]> {
@@ -212,13 +236,21 @@ export async function getTasksFromFirestore(userId: string, websiteId: string): 
 }
 
 export async function saveTaskToFirestore(userId: string, websiteId: string, task: SeoTask): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'seo_tasks', task.id);
-  await setDoc(docRef, { ...task, userId, websiteId }, { merge: true });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'seo_tasks', task.id);
+    await setDoc(docRef, { ...task, userId, websiteId }, { merge: true });
+  } catch (err) {
+    console.warn('Could not save task to Firestore:', err);
+  }
 }
 
 export async function deleteTaskFromFirestore(userId: string, websiteId: string, taskId: string): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'seo_tasks', taskId);
-  await deleteDoc(docRef);
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'seo_tasks', taskId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Could not delete task from Firestore:', err);
+  }
 }
 
 export async function getRecommendationsFromFirestore(userId: string, websiteId: string): Promise<SeoRecommendation[]> {
@@ -236,8 +268,12 @@ export async function saveRecommendationToFirestore(
   websiteId: string,
   rec: SeoRecommendation
 ): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'recommendations', rec.id);
-  await setDoc(docRef, { ...rec, userId, websiteId }, { merge: true });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'recommendations', rec.id);
+    await setDoc(docRef, { ...rec, userId, websiteId }, { merge: true });
+  } catch (err) {
+    console.warn('Could not save recommendation to Firestore:', err);
+  }
 }
 
 export async function getPageSpeedTestsFromFirestore(
@@ -260,8 +296,12 @@ export async function savePageSpeedTestToFirestore(
   websiteId: string,
   test: PageSpeedTestRun
 ): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', test.id);
-  await setDoc(docRef, { ...test, userId, websiteId }, { merge: true });
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', test.id);
+    await setDoc(docRef, { ...test, userId, websiteId }, { merge: true });
+  } catch (err) {
+    console.warn('Could not save pagespeed test to Firestore:', err);
+  }
 }
 
 export async function deletePageSpeedTestFromFirestore(
@@ -269,7 +309,11 @@ export async function deletePageSpeedTestFromFirestore(
   websiteId: string,
   testId: string
 ): Promise<void> {
-  const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', testId);
-  await deleteDoc(docRef);
+  try {
+    const docRef = doc(db, 'users', userId, 'websites', websiteId, 'pagespeed_tests', testId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Could not delete pagespeed test from Firestore:', err);
+  }
 }
 

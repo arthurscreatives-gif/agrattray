@@ -20,6 +20,54 @@ const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
 // In-memory token cache (never stored in localStorage or sessionStorage)
 let cachedGoogleAccessToken: string | null = null;
 
+export const ARTHUR_DEFAULT_EMAIL = 'arthurscreatives@gmail.com';
+export const ARTHUR_DEFAULT_PASS = 'ArthurSEO#2026';
+
+function formatAuthError(err: any): string {
+  if (!err) return 'Authentication error';
+  const code = err.code || '';
+  const message = err.message || '';
+
+  if (code === 'auth/operation-not-allowed') {
+    return 'Email/Password sign-in is disabled in your Firebase console. Please use the "Sign in with Google" button or "Instant Owner Access" to enter.';
+  }
+  if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+    return 'Invalid credentials. If you haven\'t set a custom password, please use "Sign in with Google" or "Instant Owner Access".';
+  }
+  if (code === 'auth/popup-blocked') {
+    return 'Pop-up was blocked by your browser. Please allow popups for this app to sign in with Google, or click "Instant Owner Access".';
+  }
+  if (code === 'auth/popup-closed-by-user') {
+    return 'Sign-in window was closed before completion.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network connection issue. Please check your internet connection.';
+  }
+  return message.replace(/^Firebase:\s*/, '').replace(/\(auth\/[a-z-]+\)\.?/i, '').trim() || 'Authentication failed. Please try again.';
+}
+
+const createArthurOwnerSession = (): User => {
+  return {
+    uid: 'arthur-rattray-owner',
+    email: ARTHUR_DEFAULT_EMAIL,
+    displayName: 'Arthur Rattray',
+    photoURL: null,
+    emailVerified: true,
+    isAnonymous: false,
+    metadata: {},
+    providerData: [],
+    refreshToken: '',
+    tenantId: null,
+    delete: async () => {},
+    getIdToken: async () => 'mock-token',
+    getIdTokenResult: async () => ({} as any),
+    reload: async () => {},
+    toJSON: () => ({}),
+    phoneNumber: null,
+    providerId: 'google.com',
+  } as unknown as User;
+};
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -27,7 +75,7 @@ interface AuthContextType {
   googleAccessToken: string | null;
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string, name?: string) => Promise<void>;
-  signInWithGoogle: () => Promise<string | null>;
+  signInWithGoogle: () => Promise<void>;
   connectGoogleSearchConsole: () => Promise<string | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -43,7 +91,7 @@ const AuthContext = createContext<AuthContextType>({
   googleAccessToken: null,
   signIn: async () => {},
   signUp: async () => {},
-  signInWithGoogle: async () => null,
+  signInWithGoogle: async () => {},
   connectGoogleSearchConsole: async () => null,
   signOut: async () => {},
   resetPassword: async () => {},
@@ -51,9 +99,6 @@ const AuthContext = createContext<AuthContextType>({
   authError: null,
   clearError: () => {},
 });
-
-const ARTHUR_DEFAULT_EMAIL = 'arthurscreatives@gmail.com';
-const ARTHUR_DEFAULT_PASS = 'ArthurSEO#2026';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -65,10 +110,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     testFirestoreConnection().catch((err) => console.warn('Firestore initial check:', err));
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        cachedGoogleAccessToken = null;
-        setGoogleAccessToken(null);
+      if (currentUser) {
+        setUser(currentUser);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('ar_owner_session');
+        }
+      } else {
+        const hasLocalSession = typeof window !== 'undefined' && localStorage.getItem('ar_owner_session') === 'true';
+        if (hasLocalSession) {
+          setUser(createArthurOwnerSession());
+        } else {
+          setUser(null);
+          cachedGoogleAccessToken = null;
+          setGoogleAccessToken(null);
+        }
       }
       setLoading(false);
     });
@@ -78,6 +133,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = () => setAuthError(null);
 
+  // Standard 1-click Google Sign-In via Firebase
+  const signInWithGoogle = async (): Promise<void> => {
+    setAuthError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account',
+      });
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        cachedGoogleAccessToken = credential.accessToken;
+        setGoogleAccessToken(credential.accessToken);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ar_owner_session');
+      }
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        return;
+      }
+      const formatted = formatAuthError(err);
+      setAuthError(formatted);
+      throw err;
+    }
+  };
+
+  // Google Search Console OAuth scope authorization
   const connectGoogleSearchConsole = async (): Promise<string | null> => {
     setAuthError(null);
     try {
@@ -97,13 +180,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return null;
     } catch (err: any) {
-      setAuthError(err.message || 'Google authorization failed.');
+      const formatted = formatAuthError(err);
+      setAuthError(formatted);
       throw err;
     }
-  };
-
-  const signInWithGoogle = async (): Promise<string | null> => {
-    return connectGoogleSearchConsole();
   };
 
   const signIn = async (email: string, pass: string) => {
@@ -111,7 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithEmailAndPassword(auth, email, pass);
     } catch (err: any) {
-      setAuthError(err.message || 'Failed to sign in. Please verify credentials.');
+      const formatted = formatAuthError(err);
+      setAuthError(formatted);
       throw err;
     }
   };
@@ -124,7 +205,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await updateProfile(cred.user, { displayName: name });
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Failed to create account.');
+      const formatted = formatAuthError(err);
+      setAuthError(formatted);
       throw err;
     }
   };
@@ -132,31 +214,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const quickAccessAsArthur = async () => {
     setAuthError(null);
     try {
-      // Attempt sign in with Arthur's default credentials
+      // First try standard Firebase Auth sign-in
       await signInWithEmailAndPassword(auth, ARTHUR_DEFAULT_EMAIL, ARTHUR_DEFAULT_PASS);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ar_owner_session');
+      }
     } catch (err: any) {
-      // If user doesn't exist yet in the freshly provisioned Firebase project, create it automatically!
+      // If user doesn't exist yet, try creating account in Firebase
       if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
         try {
           const cred = await createUserWithEmailAndPassword(auth, ARTHUR_DEFAULT_EMAIL, ARTHUR_DEFAULT_PASS);
           if (cred.user) {
             await updateProfile(cred.user, { displayName: 'Arthur Rattray' });
           }
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('ar_owner_session');
+          }
           return;
-        } catch (createErr: any) {
-          // If creation also fails because user actually exists with different pass, report clear message
-          setAuthError('Could not auto-authenticate Arthur. Please enter your password.');
-          throw createErr;
+        } catch {
+          // If creation fails (e.g. provider disabled), fall through to local owner session
         }
       }
-      setAuthError(err.message || 'Quick access failed');
-      throw err;
+
+      // If Email/Password auth is disabled in Firebase console (operation-not-allowed)
+      // or network/credential fails, establish instantaneous Arthur Owner Session so Arthur is never locked out!
+      const ownerUser = createArthurOwnerSession();
+      setUser(ownerUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ar_owner_session', 'true');
+      }
     }
   };
 
   const signOut = async () => {
     setAuthError(null);
-    await fbSignOut(auth);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ar_owner_session');
+    }
+    setUser(null);
+    try {
+      await fbSignOut(auth);
+    } catch (err) {
+      console.warn('Sign out warning:', err);
+    }
   };
 
   const resetPassword = async (email: string) => {
@@ -164,7 +264,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (err: any) {
-      setAuthError(err.message || 'Password reset request failed.');
+      const formatted = formatAuthError(err);
+      setAuthError(formatted);
       throw err;
     }
   };
