@@ -434,7 +434,7 @@ export default function RecommendationsView({
                 className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-400" />}
-                <span>{generating ? 'Generating with Gemini Flash...' : 'Run Generation'}</span>
+                <span>{generating ? 'Generating with Gemini 3.8 Flash...' : 'Run Generation'}</span>
               </button>
 
               {genError && (
